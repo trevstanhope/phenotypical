@@ -1,71 +1,46 @@
-import cv, cv2
-import os
+"""
+Phenotypical
 
-class Sample:
-    def __init__(self, bgr, kp, des):
-        self.bgr = bgr
-        self.kp = kp
-        self.des = des
+MongoDB Phenotype (e.g. Soy V1)
+"""
+__author__ = 'Trevor Stanhope'
+__version__ = 0.1
 
-class BruteMatch:
-    
-    def __init__(self):
-        print 'init'
-        self.SURF_HESSIAN_FILTER = 1000
-        self.surf = cv2.SURF(self.SURF_HESSIAN_FILTER)
+import cv2
+import pymongo
+import uuid
+import sys
+
+class Phenotype:
+    def __init__(self, specie=None):
+        self.specie = specie
+
+class Matcher:
+    def __init__(self, db=uuid.uuid4(), addr="127.0.0.1", port=27017, hessian=500):
+        self.mongo_client = pymongo.MongoClient(addr, port)
+        self.mongo_db = self.mongo_client[db]
+        self.keypoint_filter = cv2.SURF(hessian, nOctaves=5, nOctaveLayers=3, extended=1, upright=1)
         self.matcher = cv2.BFMatcher()
-        self.samples = {}
     
-    def train(self, img_path, img_type):
-        print 'train'
-        files = os.listdir(img_path) # OS dependent
-        img_files = [s for s in files if img_type in s]
-        for img in img_files:
-            print 'training %s' % img
-            bgr = cv2.imread(os.path.join(img_path, img))
-            gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-            (kp, des) = self.surf.detectAndCompute(gray, None)
-            self.samples[img] = Sample(bgr, kp, des)
-                     
-    def find_matches(self, bgr, MATCH_FACTOR=0.5, K=2):
-        print 'find match'
+    def train(self, bgr, phenotype):
+        print phenotype.specie
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-        (kp, des) = self.surf.detectAndCompute(gray, None)
-        res = {}
-        print self.samples
-        for sample_name in self.samples:
-            sample = self.samples[sample_name]
-            matches = self.matcher.knnMatch(des, sample.des, k=K)
-            good = [m for (m,n) in matches if m.distance < MATCH_FACTOR * n.distance]
-            res[sample_name] = len(good)
-        return res
-                
-    def show_images(self, img):
-        sample_name = self.find_match(img)
-        sample = self.samples[sample_name]
-        sample_img = sample.bgr
-        
-    def find_best(self, res):
-        return max(res, key=res.get) # not very statistical
-        
-if __name__ == '__main__':
-    new_img_path = 'tests/fig_subset_rotated.jpg'
-    cam = cv2.VideoCapture()
-    (s, bgr) = cam.read()
-    training_dir = 'samples'
-    training_type = '.jpg'
-    test = BruteMatch()
-    test.train(training_dir, training_type)
+        (kp, des) = self.keypoint_filter.detectAndCompute(gray, None)
+        return True
     
-    #new_img = cv2.imread(new_img_path)
-    cam = cv2.VideoCapture()
-    print 's'
-    while True:
-        (s, new_img) = cam.read()
-        if s:
-            print 's'
-            res = test.find_matches(new_img)
-            best = test.find_best(res)
-            print best
-        else:
-            print 'f'
+    def classify(self, bgr):
+        gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+        (kp, des) = self.keypoint_filter.detectAndCompute(gray, None)
+        matches = self.matcher.knnMatch(des, sample.des, k=K)
+        good = [m for (m,n) in matches if m.distance < MATCH_FACTOR * n.distance]
+        return phenotype
+
+if __name__ == '__main__':
+    training_path = sys.argv[1]
+    sample_path = sys.argv[2]
+    training_img = cv2.imread(training_path)
+    sample_img = cv2.imread(sample_path)
+    phenotype = Phenotype()
+    matcher = Matcher()
+    matcher.train(training_img, phenotype)
+    matcher.classify(sample_img)
