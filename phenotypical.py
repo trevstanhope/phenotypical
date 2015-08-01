@@ -28,12 +28,17 @@ class Matcher:
         (kp, des) = self.keypoint_filter.detectAndCompute(gray, None)
         return True
     
-    def classify(self, bgr):
+    def classify(self, bgr, N=2, alpha=0.5):
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
         (kp, des) = self.keypoint_filter.detectAndCompute(gray, None)
-        matches = self.matcher.knnMatch(des, sample.des, k=K)
-        good = [m for (m,n) in matches if m.distance < MATCH_FACTOR * n.distance]
-        return phenotype
+        results = []
+        for phenotype in self.mongo_db.collection_names():
+            if not phenotype == 'system.indexes':
+                matches = self.matcher.knnMatch(des, phenotype.des, k=N)
+                good = [m for (m,n) in matches if m.distance < alpha * n.distance]
+                results.append((phenotype, good))
+        descending = sorted(results, key=lambda x: x[1], reverse=True)
+        return descending[0]
 
 if __name__ == '__main__':
     training_path = sys.argv[1]
