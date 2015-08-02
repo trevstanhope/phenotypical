@@ -10,6 +10,7 @@ import cv2
 import pymongo
 import uuid
 import sys
+import numpy as np
 
 class Phenotype:
     def __init__(self, name=None, samples=[]):
@@ -38,6 +39,11 @@ class Sample:
             'des' : self.des.tolist()
         }
         return obj
+    
+    def fromDict(d):
+        self.kp = d['kp']
+        self.des = d['des']
+        return self
 
 class Matcher:
     def __init__(self, db=uuid.uuid4().hex, addr="127.0.0.1", port=27017, hessian=500):
@@ -71,18 +77,9 @@ class Matcher:
         for phenotype in self.mongo_db.collection_names():
             if not phenotype == 'system.indexes':
                 for sample in self.mongo_db[phenotype].find():
-                    matches = self.matcher.knnMatch(des, sample.des, k=N)
+                    des2 = np.array(sample['des'], np.float32) # to cast to Float32
+                    matches = self.matcher.knnMatch(des, des2, k=N)
                     good = [m for (m,n) in matches if m.distance < alpha * n.distance]
                     results.append((phenotype, good))
         descending = sorted(results, key=lambda x: x[1], reverse=True)
         return descending[0]
-
-if __name__ == '__main__':
-    training_path = sys.argv[1]
-    sample_path = sys.argv[2]
-    training_img = cv2.imread(training_path)
-    sample_img = cv2.imread(sample_path)
-    phenotype = Phenotype(name='test', samples=[training_img])
-    matcher = Matcher()
-    matcher.train(training_img, phenotype)
-    matcher.classify(sample_img)
