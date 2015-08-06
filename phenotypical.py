@@ -1,6 +1,5 @@
 """
 Phenotypical
-
 MongoDB Phenotype (e.g. Soy V1)
 """
 __author__ = 'Trevor Stanhope'
@@ -12,16 +11,10 @@ import uuid
 import sys
 import numpy as np
 
-class Phenotype:
-    def __init__(self, name=None, samples=[]):
-        self.name = name
-        self.samples = samples
-
 class Sample:
     def __init__(self, kp, des):
         self.kp = kp
         self.des = des
-
     def toDict(self):
         result = []
         for kp in self.kp:
@@ -39,7 +32,6 @@ class Sample:
             'des' : self.des.tolist()
         }
         return obj
-    
     def fromDict(d):
         self.kp = d['kp']
         self.des = d['des']
@@ -51,22 +43,17 @@ class Matcher:
         self.mongo_db = self.mongo_client[db]
         self.keypoint_filter = cv2.SURF(hessian, nOctaves=5, nOctaveLayers=3, extended=1, upright=1)
         self.matcher = cv2.BFMatcher()
-
     def train(self, bgr, phenotype):
         """
-        creates a mongoDB collection for the phenotype
-        Each training image is used to generate a 
+        inserts sample image into a mongoDB collection of the named phenotype
+        Each training image is used to generate a document which contains SURF and phenotype information
         """
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-        for bgr in phenotype.samples:
-            gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-            (keypoints, descriptors) = self.keypoint_filter.detectAndCompute(gray, None)
-            collection = self.mongo_db[phenotype.name]
-            sample = Sample(keypoints, descriptors)
-            _id = collection.insert(sample.toDict())
-            print _id # prints the object ID of the new sample image
-        return True
-    
+        (keypoints, descriptors) = self.keypoint_filter.detectAndCompute(gray, None)
+        collection = self.mongo_db[phenotype]
+        sample = Sample(keypoints, descriptors)
+        _id = collection.insert(sample.toDict())
+        return _id # prints the object ID of the new sample image
     def classify(self, bgr, N=2, alpha=0.5):
         """
         Classify an input BGR image as a phenotype
@@ -80,6 +67,6 @@ class Matcher:
                     des2 = np.array(sample['des'], np.float32) # to cast to Float32
                     matches = self.matcher.knnMatch(des, des2, k=N)
                     good = [m for (m,n) in matches if m.distance < alpha * n.distance]
-                    results.append((phenotype, good))
-        descending = sorted(results, key=lambda x: x[1], reverse=True)
-        return descending[0]
+                    results.append((phenotype, sample['_id'], len(good)))
+        descending = sorted(results, key=lambda x: x[-1], reverse=True)
+        return descending[0] # return doc info of best match
